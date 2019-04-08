@@ -315,6 +315,10 @@ else version (LDC)
     TailShared!(T) atomicOp(string op, T, V1)( ref shared T val, V1 mod ) pure nothrow @nogc @trusted
         if( __traits( compiles, mixin( "*cast(T*)&val" ~ op ~ "mod" ) ) )
     {
+      version (WebAssembly) {
+        mixin ("*(cast(T*)&val) "~op~" mod;");
+        return *(cast(T*)&val);
+      } else {
         enum suitedForAtomicRmw = (__traits(isIntegral, T) && __traits(isIntegral, V1) &&
                                    T.sizeof <= AtomicRmwSizeLimit && V1.sizeof <= AtomicRmwSizeLimit);
 
@@ -380,6 +384,7 @@ else version (LDC)
         {
             static assert( false, "Operation not supported." );
         }
+      }
     }
 
     bool cas(T,V1,V2)( shared(T)* here, const V1 ifThis, V2 writeThis ) pure nothrow @nogc @safe
@@ -402,6 +407,16 @@ else version (LDC)
 
     private bool casImpl(T,V1,V2)( shared(T)* here, V1 ifThis, V2 writeThis ) pure nothrow @nogc @trusted
     {
+      auto atomic_cmp_xchg(I)(shared I* here, I ifThis, I writeThis) {
+        version (WebAssembly) {
+          // TODO: WebAssembly has no atomic ops yet
+          if (*here == ifThis) {
+            *here = writeThis;
+          }
+          return *here;
+        } else
+          return llvm_atomic_cmp_xchg!I(here, ifThis, writeThis);
+      }
         T res = void;
         static if (__traits(isFloating, T))
         {
@@ -412,13 +427,13 @@ else version (LDC)
             else
                 static assert(0, "Cannot atomically store floating-point values > 64 bits.");
 
-            I rawRes = llvm_atomic_cmp_xchg!I(
+            I rawRes = atomic_cmp_xchg!I(
                 cast(shared I*)here, *cast(I*)&ifThis, *cast(I*)&writeThis);
             res = *cast(T*)&rawRes;
         }
         else static if (is(T P == U*, U) || is(T == class) || is(T == interface))
         {
-            res = cast(T)cast(void*)llvm_atomic_cmp_xchg!(size_t)(
+            res = cast(T)cast(void*)atomic_cmp_xchg!(size_t)(
                 cast(shared size_t*)cast(void**)here,
                 cast(size_t)cast(void*)ifThis,
                 cast(size_t)cast(void*)writeThis
@@ -426,11 +441,11 @@ else version (LDC)
         }
         else static if (is(T : bool))
         {
-            res = llvm_atomic_cmp_xchg!(ubyte)(cast(shared ubyte*)here, ifThis ? 1 : 0, writeThis ? 1 : 0) ? 1 : 0;
+            res = atomic_cmp_xchg!(ubyte)(cast(shared ubyte*)here, ifThis ? 1 : 0, writeThis ? 1 : 0) ? 1 : 0;
         }
         else
         {
-            res = llvm_atomic_cmp_xchg!(T)(here, cast(T)ifThis, cast(T)writeThis);
+            res = atomic_cmp_xchg!(T)(here, cast(T)ifThis, cast(T)writeThis);
         }
         return res is cast(T)ifThis;
     }
@@ -494,14 +509,21 @@ else version (LDC)
     TailShared!T atomicLoad(MemoryOrder ms = MemoryOrder.seq, T)(ref const shared T val) pure nothrow @nogc @trusted
         if( !__traits(isFloating, T) )
     {
+      version (WebAssembly) {
+        return *cast(TailShared!T*)&val;
+      } else {
         alias Int = _AtomicType!T;
         auto asInt = llvm_atomic_load!Int(cast(shared(Int)*)cast(void*)&val, _ordering!(ms));
         return *cast(TailShared!T*)&asInt;
+      }
     }
 
     void atomicStore(MemoryOrder ms = MemoryOrder.seq, T, V1)( ref shared T val, V1 newval ) pure nothrow @nogc @trusted
         if( __traits( compiles, { val = newval; } ) )
     {
+      version (WebAssembly) {
+        *(cast(T*)&val) = newval;
+      } else {
         alias Int = _AtomicType!T;
         auto target = cast(shared(Int)*)cast(void*)&val;
 
@@ -516,6 +538,7 @@ else version (LDC)
         }
 
         llvm_atomic_store!Int(*newPtr, target, _ordering!(ms));
+      }
     }
 
     void atomicFence() nothrow @nogc @safe

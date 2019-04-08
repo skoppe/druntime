@@ -464,8 +464,6 @@ deprecated void setAssertHandler( AssertHandler h ) @trusted nothrow @nogc
  */
 extern (C) void onAssertError( string file = __FILE__, size_t line = __LINE__ ) nothrow
 {
-    if ( _assertHandler is null )
-        throw new AssertError( file, line );
     _assertHandler( file, line, null);
 }
 
@@ -482,8 +480,8 @@ extern (C) void onAssertError( string file = __FILE__, size_t line = __LINE__ ) 
  */
 extern (C) void onAssertErrorMsg( string file, size_t line, string msg ) nothrow
 {
-    if ( _assertHandler is null )
-        throw new AssertError( msg, file, line );
+  if (_assertHandler is null)
+    assert(0); // TODO: this makes little sense...
     _assertHandler( file, line, msg );
 }
 
@@ -520,6 +518,9 @@ extern (C) void onUnittestErrorMsg( string file, size_t line, string msg ) nothr
  */
 extern (C) void onRangeError( string file = __FILE__, size_t line = __LINE__ ) @trusted pure nothrow @nogc
 {
+  version (WebAssembly) {
+    assert(0, "onRangeError"); // TODO: include file and line
+  } else
     throw staticError!RangeError( file, line, null );
 }
 
@@ -538,9 +539,13 @@ extern (C) void onRangeError( string file = __FILE__, size_t line = __LINE__ ) @
  */
 extern (C) void onFinalizeError( TypeInfo info, Throwable e, string file = __FILE__, size_t line = __LINE__ ) @trusted nothrow
 {
+  version (WebAssembly) {
+    onAssertErrorMsg( file, line, e.msg );
+  } else {
     // This error is thrown during a garbage collection, so no allocation must occur while
     //  generating this object. So we use a preallocated instance
     throw staticError!FinalizeError(info, e, file, line);
+  }
 }
 
 
@@ -555,7 +560,11 @@ extern (C) void onFinalizeError( TypeInfo info, Throwable e, string file = __FIL
  */
 deprecated extern (C) void onHiddenFuncError( Object o ) @safe pure nothrow
 {
+  version (WebAssembly) {
+    assert(0, "Hidden function Error" );
+  } else {
     throw new HiddenFuncError( typeid(o) );
+  }
 }
 
 
@@ -568,15 +577,23 @@ deprecated extern (C) void onHiddenFuncError( Object o ) @safe pure nothrow
  */
 extern (C) void onOutOfMemoryError(void* pretend_sideffect = null) @trusted pure nothrow @nogc /* dmd @@@BUG11461@@@ */
 {
+  version (WebAssembly) {
+    assert(0, "Out of memory" );
+  } else {
     // NOTE: Since an out of memory condition exists, no allocation must occur
     //       while generating this object.
     throw staticError!OutOfMemoryError();
+  }
 }
 
 extern (C) void onOutOfMemoryErrorNoGC() @trusted nothrow @nogc
 {
+  version (WebAssembly) {
+    assert(0, "Out of memory" );
+  } else {
     // suppress stacktrace until they are @nogc
     throw staticError!OutOfMemoryError(false);
+  }
 }
 
 
@@ -589,9 +606,13 @@ extern (C) void onOutOfMemoryErrorNoGC() @trusted nothrow @nogc
  */
 extern (C) void onInvalidMemoryOperationError(void* pretend_sideffect = null) @trusted pure nothrow @nogc /* dmd @@@BUG11461@@@ */
 {
+  version (WebAssembly) {
+    assert(0, "Invalid memory operation" );
+  } else {
     // The same restriction applies as for onOutOfMemoryError. The GC is in an
     // undefined state, thus no allocation must occur while generating this object.
     throw staticError!InvalidMemoryOperationError();
+  }
 }
 
 
@@ -627,7 +648,11 @@ extern (C) void onSwitchError( string file = __FILE__, size_t line = __LINE__ ) 
  */
 extern (C) void onUnicodeError( string msg, size_t idx, string file = __FILE__, size_t line = __LINE__ ) @safe pure
 {
+  version (WebAssembly) {
+    assert(0, msg); // TODO: also include msg, file, line and idx in error message as well
+  } else {
     throw new UnicodeException( msg, idx, file, line );
+  }
 }
 
 /***********************************
@@ -710,7 +735,10 @@ extern (C)
 }
 
 // TLS storage shared for all errors, chaining might create circular reference
-private void[128] _store;
+version (WebAssembly)
+__gshared private void[128] _store;
+ else
+   private void[128] _store;
 
 // only Errors for now as those are rarely chained
 private T staticError(T, Args...)(auto ref Args args)

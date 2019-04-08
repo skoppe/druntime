@@ -15,8 +15,8 @@ module gc.bits;
 
 
 import core.bitop;
-import core.stdc.string;
-import core.stdc.stdlib;
+import core.stdc.string : memset, memcpy;
+import core.stdc.stdlib : free, calloc;
 import core.exception : onOutOfMemoryError;
 
 // use version gcbitsSingleBitOperation to disable optimizations that use

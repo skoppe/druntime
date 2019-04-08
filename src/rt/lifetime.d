@@ -14,7 +14,7 @@ module rt.lifetime;
 
 import core.memory;
 debug(PRINTF) import core.stdc.stdio;
-static import rt.tlsgc;
+version (WebAssembly) {} else static import rt.tlsgc;
 version (LDC) import ldc.attributes;
 
 alias BlkInfo = GC.BlkInfo;
@@ -492,8 +492,12 @@ BlkInfo __arrayAlloc(size_t arrsize, ref BlkInfo info, const TypeInfo ti, const 
   */
 enum N_CACHE_BLOCKS=8;
 
-// note this is TLS, so no need to sync.
-BlkInfo *__blkcache_storage;
+version (WebAssembly)
+__gshared BlkInfo *__blkcache_storage;
+ else {
+   // note this is TLS, so no need to sync.
+   BlkInfo *__blkcache_storage;
+ }
 
 static if (N_CACHE_BLOCKS==1)
 {
@@ -511,7 +515,10 @@ else
     {
         int __nextRndNum = 0;
     }
-    int __nextBlkIdx;
+    version (WebAssembly)
+      __gshared int __nextBlkIdx;
+    else
+      int __nextBlkIdx;
 }
 
 @property BlkInfo *__blkcache() nothrow
@@ -541,7 +548,8 @@ static ~this()
 }
 
 
-// we expect this to be called with the lock in place
+version (WebAssembly) {} else
+// // we expect this to be called with the lock in place
 void processGCMarks(BlkInfo* cache, scope rt.tlsgc.IsMarkedDg isMarked) nothrow
 {
     // called after the mark routine to eliminate block cache data when it

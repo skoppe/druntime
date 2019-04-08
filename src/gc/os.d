@@ -14,7 +14,29 @@
 module gc.os;
 
 
-version (Windows)
+version (WebAssembly) {
+  nothrow:
+  private __gshared void* wasmFreeList = null;
+  __gshared void* wasmStart = null;
+  enum WasmPageSize = 64*1024;
+
+  // returns amount of 64Kb pages
+  pragma(LDC_intrinsic, "llvm.wasm.memory.size.i32")
+    private int _wasmMemorySize(int memIndex);
+
+  pragma(inline, true) auto wasmMemorySize() {
+    return _wasmMemorySize(0);
+  }
+
+  // adjust memory according to delta (64Kb pages)
+  pragma(LDC_intrinsic, "llvm.wasm.memory.grow.i32")
+    int _wasmMemoryGrow(int memIndex, int delta);
+
+  pragma(inline, true)
+    auto wasmMemoryGrow(int delta) {
+    return _wasmMemoryGrow(0, delta);
+  }
+} else version (Windows)
 {
     import core.sys.windows.winbase : GetCurrentThreadId, VirtualAlloc, VirtualFree;
     import core.sys.windows.winnt : MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_READWRITE;
@@ -129,7 +151,7 @@ else static if (is(typeof(malloc))) // else version (GC_Use_Alloc_Malloc)
     //       after PAGESIZE bytes used by the GC.
 
 
-    import gc.gc;
+    // import gc.gc;
 
 
     const size_t PAGE_MASK = PAGESIZE - 1;
@@ -150,9 +172,34 @@ else static if (is(typeof(malloc))) // else version (GC_Use_Alloc_Malloc)
         return 0;
     }
 }
-else
+ else
 {
-    static assert(false, "No supported allocation methods available.");
+  version (WebAssembly) {
+    // NOTE: This assumes malloc granularity is at least (void*).sizeof.  If
+    //       (req_size + PAGESIZE) is allocated, and the pointer is rounded up
+    //       to PAGESIZE alignment, there will be space for a void* at the end
+    //       after PAGESIZE bytes used by the GC.
+
+    void *os_mem_map(size_t nbytes) nothrow
+    {
+      if (wasmStart is null)
+        wasmStart = cast(void*)(wasmMemorySize() * WasmPageSize);
+      // TODO: search freelist first
+      size_t pages = 1 + nbytes / WasmPageSize;
+      auto currentPages = wasmMemoryGrow(0);
+      wasmMemoryGrow(pages);
+      auto empty = pages * WasmPageSize - nbytes;
+      // TODO add empty to freelist
+      return cast(void*)(wasmStart + currentPages * WasmPageSize);
+    }
+
+    int os_mem_unmap(void *base, size_t nbytes) nothrow
+    {
+      // TODO add to freelist
+      return 0;
+    }
+  } else
+      static assert(false, "No supported allocation methods available.");
 }
 
 /**

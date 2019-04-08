@@ -92,6 +92,10 @@ else version (Posix)
 import core.sys.posix.time;
 import core.sys.posix.sys.time;
 }
+ else version (WebAssembly)
+   {
+     import core.sys.wasi.core;
+   }
 
 version (OSX)
     version = Darwin;
@@ -338,6 +342,10 @@ else version (Solaris) enum ClockType
     processCPUTime = 4,
     second = 6,
     threadCPUTime = 7,
+}
+else version (WebAssembly) enum ClockType
+{
+  normal = 0 // wasi has 3 more clocks, but we will use only the monotonic one to ease ports to the browser
 }
 else
 {
@@ -2067,6 +2075,10 @@ struct MonoTimeImpl(ClockType clockType)
     {
         enum clockArg = _posixClock(clockType);
     }
+    else version (WebAssembly)
+      {
+
+      }
     else
         static assert(0, "Unsupported platform");
 
@@ -2131,6 +2143,15 @@ struct MonoTimeImpl(ClockType clockType)
             return MonoTimeImpl(convClockFreq(ts.tv_sec * 1_000_000_000L + ts.tv_nsec,
                                               1_000_000_000L,
                                               ticksPerSecond));
+        } else version (WebAssembly) {
+          // TODO: this precision is just guessed... maybe first get with __wasi_clock_res_get
+          enum precision = 10000;
+          __wasi_timestamp_t time;
+          if (clock_time_get(__WASI_CLOCK_MONOTONIC, precision, &time) != __WASI_ESUCCESS) {
+            import core.internal.abort : abort;
+            abort("Call to wasi_unstable.clock_time_get failed");
+          }
+          return MonoTimeImpl(time);
         }
     }
 
@@ -2525,6 +2546,16 @@ extern(C) void _d_initMonoTime()
                 }
             }
         }
+    } else version (WebAssembly) {
+      foreach (i, typeStr; __traits(allMembers, ClockType))
+      {
+        mixin("enum type = ClockType."~typeStr~";");
+        __wasi_timestamp_t res;
+        import core.internal.abort;
+        if (__WASI_ESUCCESS != clock_res_get(type, &res))
+          abort("Failed to call clock_res_get with clock "~typeStr);
+        tps[i] = res;
+      }
     }
 }
 
@@ -2543,11 +2574,14 @@ unittest
 
     static bool clockSupported(ClockType c)
     {
+      version (WebAssembly) {
+        return true;
+      } else {
         version (Linux_Pre_2639) // skip CLOCK_BOOTTIME on older linux kernels
             return c != ClockType.second && c != ClockType.bootTime;
         else
             return c != ClockType.second; // second doesn't work with MonoTimeImpl
-
+        }
     }
 
     foreach (typeStr; __traits(allMembers, ClockType))
@@ -3386,6 +3420,15 @@ struct TickDuration
                 return TickDuration(tv.tv_sec * TickDuration.ticksPerSec +
                                     tv.tv_usec * TickDuration.ticksPerSec / 1000 / 1000);
             }
+        } else version (WebAssembly) {
+          // TODO: this precision is just guessed... maybe first get with __wasi_clock_res_get
+          enum precision = 10000;
+          __wasi_timestamp_t time;
+          if (clock_time_get(__WASI_CLOCK_MONOTONIC, precision, &time) != __WASI_ESUCCESS) {
+            import core.internal.abort : abort;
+            abort("Call to wasi_unstable.clock_time_get failed");
+          }
+          return TickDuration(time);
         }
     }
 

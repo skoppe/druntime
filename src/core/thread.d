@@ -11,6 +11,17 @@
 
 module core.thread;
 
+/**
+ * Indicates whether an address has been marked by the GC.
+ */
+enum IsMarked : int
+  {
+    no, /// Address is not marked.
+      yes, /// Address is marked.
+      unknown, /// Address is not managed by the GC.
+      }
+
+version (WebAssembly) {} else:
 
 public import core.time; // for Duration
 import core.exception : onOutOfMemoryError;
@@ -37,6 +48,9 @@ else version (TVOS)
 else version (WatchOS)
     version = Darwin;
 
+version (WebAssembly) {
+    import core.sys.wasi.sys.types;
+}
 private
 {
     // interface to rt.tlsgc
@@ -2630,6 +2644,10 @@ else
                        .set  at`, "r", regs.ptr);
                 __asm(".set  noat; sw $$29, 0($0); .set  at;", "r", &sp);
             }
+            else version (WebAssembly)
+            {
+                // TODO: noop
+            }
             else
             {
                 static assert(false, "Architecture not supported.");
@@ -3311,16 +3329,6 @@ unittest
     thread_suspendAll();
     assert(!inCriticalRegion);
     thread_resumeAll();
-}
-
-/**
- * Indicates whether an address has been marked by the GC.
- */
-enum IsMarked : int
-{
-         no, /// Address is not marked.
-        yes, /// Address is marked.
-    unknown, /// Address is not managed by the GC.
 }
 
 alias IsMarkedDg = int delegate( void* addr ) nothrow; /// The isMarked callback function.
@@ -6385,4 +6393,7 @@ version (Windows)
     alias ThreadID = uint;
 else
 version (Posix)
+    alias ThreadID = pthread_t;
+else
+version (WebAssembly)
     alias ThreadID = pthread_t;

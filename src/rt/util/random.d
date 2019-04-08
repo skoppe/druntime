@@ -55,6 +55,18 @@ struct Rand48
             rng_state = mach_absolute_time();
             popFront();
         }
+        else version (WebAssembly)
+          {
+            import core.sys.wasi.core;
+            // TODO: this precision is just guessed... maybe first get with __wasi_clock_res_get
+            enum precision = 10000;
+            __wasi_timestamp_t time;
+            if (clock_time_get(__WASI_CLOCK_MONOTONIC, precision, &time) != __WASI_ESUCCESS) {
+              import core.internal.abort : abort;
+              abort("Call to wasi_unstable.clock_time_get failed");
+            }
+            rng_state = time;
+        }
         else
         {
             // Fallback to libc timestamp in seconds.

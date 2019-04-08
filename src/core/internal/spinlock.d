@@ -8,6 +8,33 @@
  */
 module core.internal.spinlock;
 
+version (WebAssembly) {
+  shared struct SpinLock {
+    /// for how long is the lock usually contended
+    enum Contention : ubyte
+      {
+        brief,
+          medium,
+          lengthy,
+          }
+    @trusted @nogc nothrow:
+    this(Contention contention) {}
+    void lock() {}
+    void unlock() {}
+    void yield(size_t k) {}
+  }
+  shared align(64)
+    struct AlignedSpinLock
+    {
+      this(SpinLock.Contention contention) @trusted @nogc nothrow
+      {
+      }
+      SpinLock impl;
+      alias impl this;
+    }
+
+} else:
+
 import core.atomic, core.thread;
 
 shared struct SpinLock

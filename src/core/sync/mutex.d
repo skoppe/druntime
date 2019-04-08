@@ -15,6 +15,7 @@
  */
 module core.sync.mutex;
 
+version (WebAssembly) {} else:
 
 public import core.sync.exception;
 

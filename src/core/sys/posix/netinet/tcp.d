@@ -63,3 +63,7 @@ else version (linux)
 {
     enum TCP_NODELAY = 1;
 }
+else version (WebAssembly) // TODO: needs to be WASI
+{
+    enum TCP_NODELAY = 1;
+}

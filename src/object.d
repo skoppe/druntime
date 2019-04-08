@@ -588,7 +588,7 @@ private void _destructRecurse(S)(ref S s)
         s.__xdtor();
 }
 
-nothrow @safe @nogc unittest
+nothrow @trusted @nogc unittest
 {
     {
         struct A { string s = "A";  }
@@ -600,11 +600,11 @@ nothrow @safe @nogc unittest
         assert(a.s == "A");
     }
     {
-        static int destroyed = 0;
+        __gshared static int destroyed = 0;
         struct C
         {
             string s = "C";
-            ~this() nothrow @safe @nogc
+            ~this() nothrow @trusted @nogc
             {
                 destroyed ++;
             }
@@ -614,7 +614,7 @@ nothrow @safe @nogc unittest
         {
             C c;
             string s = "B";
-            ~this() nothrow @safe @nogc
+            ~this() nothrow @trusted @nogc
             {
                 destroyed ++;
             }
@@ -665,13 +665,13 @@ void destroy(bool initialize = true, T)(T obj) if (is(T == interface))
     {
         struct Agg
         {
-            static int dtorCount;
+            __gshared static int dtorCount;
 
             int x = 10;
             ~this() { dtorCount++; }
         }
 
-        static int dtorCount;
+        __gshared static int dtorCount;
 
         string s = "S";
         Agg a;
@@ -748,7 +748,7 @@ void destroy(bool initialize = true, T)(T obj) if (is(T == interface))
     // class with an `alias this`
     class A
     {
-        static int dtorCount;
+        __gshared static int dtorCount;
         ~this()
         {
             dtorCount++;
@@ -763,7 +763,7 @@ void destroy(bool initialize = true, T)(T obj) if (is(T == interface))
         {
             a = new A;
         }
-        static int dtorCount;
+        __gshared static int dtorCount;
         ~this()
         {
             dtorCount++;
@@ -792,7 +792,7 @@ void destroy(bool initialize = true, T)(T obj) if (is(T == interface))
         assert(b.s == "A");
     }
     {
-        static bool destroyed = false;
+        __gshared static bool destroyed = false;
         class B: I
         {
             string s = "B";
@@ -832,7 +832,7 @@ void destroy(bool initialize = true, T)(T obj) if (is(T == interface))
     }
 }
 
-nothrow @safe @nogc unittest
+nothrow @trusted @nogc unittest
 {
     {
         struct A { string s = "A";  }
@@ -844,11 +844,11 @@ nothrow @safe @nogc unittest
         assert(a.s == "A");
     }
     {
-        static int destroyed = 0;
+        __gshared static int destroyed = 0;
         struct C
         {
             string s = "C";
-            ~this() nothrow @safe @nogc
+            ~this() nothrow @trusted @nogc
             {
                 destroyed ++;
             }
@@ -858,7 +858,7 @@ nothrow @safe @nogc unittest
         {
             C c;
             string s = "B";
-            ~this() nothrow @safe @nogc
+            ~this() nothrow @trusted @nogc
             {
                 destroyed ++;
             }
@@ -909,7 +909,7 @@ void destroy(bool initialize = true, T : U[n], U, size_t n)(ref T obj) if (!is(T
 @system unittest
 {
     // Bugzilla 15009
-    static string op;
+    __gshared static string op;
     static struct S
     {
         int x;
@@ -1032,6 +1032,9 @@ class Object
         // BUG: this prevents a compacting GC from working, needs to be fixed
         //return cast(int)cast(void*)this - cast(int)cast(void*)o;
 
+      version (WebAssembly)
+        assert(0, "need opCmp for class "~typeid(this).name);
+      else
         throw new Exception("need opCmp for class " ~ typeid(this).name);
         //return this !is o;
     }
@@ -3765,10 +3768,10 @@ void _postblitRecurse(E, size_t n)(ref E[n] arr)
 }
 
 // Test static struct
-nothrow @safe @nogc unittest
+nothrow @trusted @nogc unittest
 {
-    static int i = 0;
-    static struct S { ~this() nothrow @safe @nogc { i = 42; } }
+    __gshared static int i = 0;
+    static struct S { ~this() nothrow @trusted @nogc { i = 42; } }
     S s;
     _destructRecurse(s);
     assert(i == 42);
@@ -3858,12 +3861,12 @@ nothrow @safe @nogc unittest
 /+ nothrow @safe +/ unittest
 {
     static class FailedPostblitException : Exception { this() nothrow @safe { super(null); } }
-    static string[] order;
+    __gshared static string[] order;
     static struct Inner
     {
         char id;
 
-        @safe:
+        @trusted:
         this(this)
         {
             order ~= "copy inner #" ~ id;
@@ -3881,7 +3884,7 @@ nothrow @safe @nogc unittest
     {
         Inner inner1, inner2, inner3;
 
-        nothrow @safe:
+        nothrow @trusted:
         this(char first, char second, char third)
         {
             inner1 = Inner(first);
@@ -4205,6 +4208,9 @@ bool _xopEquals(in void*, in void*)
 
 bool _xopCmp(in void*, in void*)
 {
+  version (WebAssembly) {
+    assert(0, "TypeInfo.compare is not implemented");
+  } else
     throw new Error("TypeInfo.compare is not implemented");
 }
 

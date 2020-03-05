@@ -322,6 +322,10 @@ void initSections() nothrow @nogc
         findPhdrForAddr(&globalSectionGroup, &phdr) || assert(0);
 
         scanSegments(phdr, &globalSectionGroup);
+    } else version (WebAssembly) {
+      auto data_beg = cast(void*)1024;
+      auto data_end = cast(void*)&__data_end;
+      pushRange(data_beg, data_end);
     }
 }
 
@@ -347,6 +351,9 @@ void[] initTLSRanges() nothrow @nogc
         debug(PRINTF) printf("Add range %p %d\n", rng ? rng.ptr : cast(void*)0, rng ? rng.length : 0);
         return rng;
     }
+    else version (WebAssembly) {
+      return [];
+    }
     else static assert(0, "TLS range detection not implemented for this OS.");
 
 }
@@ -360,6 +367,20 @@ void scanTLSRanges(void[] rng, scope void delegate(void* pbeg, void* pend) nothr
 {
     debug(PRINTF) printf("scanTLSRanges called (rng = %p %d)\n", rng ? rng.ptr : cast(void*)0, rng ? rng.length : 0);
     if (rng) dg(rng.ptr, rng.ptr + rng.length);
+}
+
+version (WebAssembly) {
+  extern(C)
+  {
+    /* Symbols created by the compiler/linker and inserted into the
+     * object file that 'bracket' sections.
+     */
+    extern __gshared
+    {
+      size_t __data_end;
+      size_t __heap_base;
+    }
+  }
 }
 
 extern (C) __gshared ModuleReference* _Dmodule_ref;   // start of linked list

@@ -494,6 +494,13 @@ private T max(T)(T a, T b) pure nothrow @nogc
 //------------------------------------------------------------------------------
 
 /// Determine number of entries in associative array.
+version (WebAssembly) {
+    extern (C) size_t _aaLen(scope const Impl* impl) pure nothrow @nogc
+    {
+        const AA aa = const AA(impl);
+        return aa ? aa.length : 0;
+    }
+} else
 extern (C) size_t _aaLen(scope const AA aa) pure nothrow @nogc
 {
     return aa ? aa.length : 0;
@@ -587,7 +594,15 @@ extern (C) void* _aaGetX(AA* aa, const TypeInfo_AssociativeArray ti,
  * Returns:
  *      pointer to value if present, null otherwise
  */
-extern (C) inout(void)* _aaGetRvalueX(inout AA aa, scope const TypeInfo keyti, const size_t valsz,
+version (WebAssembly) {
+    extern (C) void* _aaGetRvalueX(Impl* aa, scope const TypeInfo keyti, const size_t valsz,
+                                   scope const void* pkey)
+    {
+        return _aaInX(aa, keyti, pkey);
+    }
+
+} else
+extern (C) void* _aaGetRvalueX(AA aa, scope const TypeInfo keyti, const size_t valsz,
     scope const void* pkey)
 {
     return _aaInX(aa, keyti, pkey);
@@ -603,7 +618,21 @@ extern (C) inout(void)* _aaGetRvalueX(inout AA aa, scope const TypeInfo keyti, c
  * Returns:
  *      pointer to value if present, null otherwise
  */
-extern (C) inout(void)* _aaInX(inout AA aa, scope const TypeInfo keyti, scope const void* pkey)
+version (WebAssembly) {
+    extern (C) void* _aaInX(Impl* impl, scope const TypeInfo keyti, scope const void* pkey)
+    {
+        AA aa = AA(impl);
+        if (aa.empty)
+            return null;
+
+        immutable hash = calcHash(pkey, keyti);
+        if (auto p = aa.findSlotLookup(hash, pkey, keyti))
+            return p.entry + aa.valoff;
+
+        return null;
+    }
+} else
+extern (C) void* _aaInX(AA aa, scope const TypeInfo keyti, scope const void* pkey)
 {
     if (aa.empty)
         return null;
@@ -615,6 +644,29 @@ extern (C) inout(void)* _aaInX(inout AA aa, scope const TypeInfo keyti, scope co
 }
 
 /// Delete entry scope const AA, return true if it was present
+version (WebAssembly) {
+    extern (C) bool _aaDelX(Impl* impl, scope const TypeInfo keyti, scope const void* pkey)
+    {
+        AA aa = AA(impl);
+        if (aa.empty)
+            return false;
+
+        immutable hash = calcHash(pkey, keyti);
+        if (auto p = aa.findSlotLookup(hash, pkey, keyti))
+            {
+                // clear entry
+                p.hash = HASH_DELETED;
+                p.entry = null;
+
+                ++aa.deleted;
+                if (aa.length * SHRINK_DEN < aa.dim * SHRINK_NUM)
+                    aa.shrink(keyti);
+
+                return true;
+            }
+        return false;
+    }
+} else
 extern (C) bool _aaDelX(AA aa, scope const TypeInfo keyti, scope const void* pkey)
 {
     if (aa.empty)
@@ -637,6 +689,16 @@ extern (C) bool _aaDelX(AA aa, scope const TypeInfo keyti, scope const void* pke
 }
 
 /// Remove all elements from AA.
+version (WebAssembly) {
+    extern (C) void _aaClear(Impl* impl) pure nothrow
+    {
+        AA aa = AA(impl);
+        if (!aa.empty)
+            {
+                aa.impl.clear();
+            }
+    }
+} else
 extern (C) void _aaClear(AA aa) pure nothrow
 {
     if (!aa.empty)
@@ -654,6 +716,31 @@ extern (C) void* _aaRehash(AA* paa, scope const TypeInfo keyti) pure nothrow
 }
 
 /// Return a GC allocated array of all values
+version (WebAssembly) {
+    extern (C) inout(void[]) _aaValues(inout Impl* impl, const size_t keysz, const size_t valsz,
+                                       const TypeInfo tiValueArray) pure nothrow
+    {
+        const AA aa = const AA(impl);
+        if (aa.empty)
+            return null;
+
+        import rt.lifetime : _d_newarrayU;
+
+        auto res = _d_newarrayU(tiValueArray, aa.length).ptr;
+        auto pval = res;
+
+        immutable off = aa.valoff;
+        foreach (b; aa.buckets[aa.firstUsed .. $])
+            {
+                if (!b.filled)
+                    continue;
+                pval[0 .. valsz] = b.entry[off .. valsz + off];
+                pval += valsz;
+            }
+        // postblit is done in object.values
+        return (cast(inout(void)*) res)[0 .. aa.length]; // fake length, return number of elements
+    }
+} else
 extern (C) inout(void[]) _aaValues(inout AA aa, const size_t keysz, const size_t valsz,
     const TypeInfo tiValueArray) pure nothrow
 {
@@ -678,6 +765,29 @@ extern (C) inout(void[]) _aaValues(inout AA aa, const size_t keysz, const size_t
 }
 
 /// Return a GC allocated array of all keys
+version (WebAssembly) {
+    extern (C) inout(void[]) _aaKeys(inout Impl* impl, const size_t keysz, const TypeInfo tiKeyArray) pure nothrow
+    {
+        const AA aa = const AA(impl);
+        if (aa.empty)
+            return null;
+
+        import rt.lifetime : _d_newarrayU;
+
+        auto res = _d_newarrayU(tiKeyArray, aa.length).ptr;
+        auto pkey = res;
+
+        foreach (b; aa.buckets[aa.firstUsed .. $])
+            {
+                if (!b.filled)
+                    continue;
+                pkey[0 .. keysz] = b.entry[0 .. keysz];
+                pkey += keysz;
+            }
+        // postblit is done in object.keys
+        return (cast(inout(void)*) res)[0 .. aa.length]; // fake length, return number of elements
+    }
+} else
 extern (C) inout(void[]) _aaKeys(inout AA aa, const size_t keysz, const TypeInfo tiKeyArray) pure nothrow
 {
     if (aa.empty)
@@ -704,6 +814,24 @@ extern (D) alias dg_t = int delegate(void*);
 extern (D) alias dg2_t = int delegate(void*, void*);
 
 /// foreach opApply over all values
+version (WebAssembly) {
+    extern (C) int _aaApply(Impl* impl, const size_t keysz, dg_t dg)
+    {
+        AA aa = AA(impl);
+        if (aa.empty)
+            return 0;
+
+        immutable off = aa.valoff;
+        foreach (b; aa.buckets)
+            {
+                if (!b.filled)
+                    continue;
+                if (auto res = dg(b.entry + off))
+                    return res;
+            }
+        return 0;
+    }
+} else
 extern (C) int _aaApply(AA aa, const size_t keysz, dg_t dg)
 {
     if (aa.empty)
@@ -721,6 +849,24 @@ extern (C) int _aaApply(AA aa, const size_t keysz, dg_t dg)
 }
 
 /// foreach opApply over all key/value pairs
+version (WebAssembly) {
+    extern (C) int _aaApply2(Impl* impl, const size_t keysz, dg2_t dg)
+    {
+        AA aa = AA(impl);
+        if (aa.empty)
+            return 0;
+
+        immutable off = aa.valoff;
+        foreach (b; aa.buckets)
+            {
+                if (!b.filled)
+                    continue;
+                if (auto res = dg(b.entry, b.entry + off))
+                    return res;
+            }
+        return 0;
+    }
+} else
 extern (C) int _aaApply2(AA aa, const size_t keysz, dg2_t dg)
 {
     if (aa.empty)
@@ -786,6 +932,38 @@ extern (C) Impl* _d_assocarrayliteralTX(const TypeInfo_AssociativeArray ti, void
 }
 
 /// compares 2 AAs for equality
+version (WebAssembly) {
+    extern (C) int _aaEqual(scope const TypeInfo tiRaw, scope const Impl* impl1, scope const Impl* impl2)
+    {
+        const AA aa1 = const AA(impl1);
+        const AA aa2 = const AA(impl2);
+        if (aa1.impl is aa2.impl)
+            return true;
+
+        immutable len = _aaLen(aa1);
+        if (len != _aaLen(aa2))
+            return false;
+
+        if (!len) // both empty
+            return true;
+
+        import rt.lifetime : unqualify;
+
+        auto uti = unqualify(tiRaw);
+        auto ti = *cast(TypeInfo_AssociativeArray*)&uti;
+        // compare the entries
+        immutable off = aa1.valoff;
+        foreach (b1; aa1.buckets)
+            {
+                if (!b1.filled)
+                    continue;
+                auto pb2 = aa2.findSlotLookup(b1.hash, b1.entry, ti.key);
+                if (pb2 is null || !ti.value.equals(b1.entry + off, pb2.entry + off))
+                    return false;
+            }
+        return true;
+    }
+} else
 extern (C) int _aaEqual(scope const TypeInfo tiRaw, scope const AA aa1, scope const AA aa2)
 {
     if (aa1.impl is aa2.impl)
@@ -854,6 +1032,21 @@ struct Range
 
 extern (C) pure nothrow @nogc @safe
 {
+    version (WebAssembly) {
+        Range _aaRange(Impl* impl)
+        {
+            AA aa = AA(impl);
+            if (!aa)
+                return Range();
+
+            foreach (i; aa.firstUsed .. aa.dim)
+                {
+                    if (aa.buckets[i].filled)
+                        return Range(aa.impl, i);
+                }
+            return Range(aa, aa.dim);
+        }
+    } else
     Range _aaRange(AA aa)
     {
         if (!aa)

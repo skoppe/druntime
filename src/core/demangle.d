@@ -2201,7 +2201,7 @@ char[] reencodeMangled(const(char)[] mangled) nothrow pure @safe
     d.mute = true; // no demangled output
     try
     {
-        d.parseMangledName();
+       d.parseMangledName();
         if (d.hooks.lastpos < d.pos)
             d.hooks.result ~= d.buf[d.hooks.lastpos .. d.pos];
         return d.hooks.result;
@@ -2339,6 +2339,7 @@ char[] mangleFunc(T:FT*, FT)(const(char)[] fqn, char[] dst = null) @safe pure no
 
 private enum hasTypeBackRef = (int function(void**,void**)).mangleof[$-4 .. $] == "QdZi";
 
+version (WebAssembly) {} else
 ///
 @safe pure nothrow unittest
 {
@@ -2545,6 +2546,8 @@ version (unittest)
             alias staticIota = Seq!(staticIota!(x - 1), x - 1);
     }
 }
+
+version (WebAssembly) {} else
 @safe pure nothrow unittest
 {
     foreach ( i, name; table )
@@ -2570,6 +2573,7 @@ version (unittest)
     }
 }
 
+version (WebAssembly) {} else
 unittest
 {
     // https://issues.dlang.org/show_bug.cgi?id=18300
@@ -2582,6 +2586,7 @@ unittest
     }
 }
 
+version (WebAssembly) {} else
 unittest
 {
     // https://issues.dlang.org/show_bug.cgi?id=18300
@@ -2654,7 +2659,12 @@ extern (C) private
         import core.stdc.errno : errno;
 
         const err = errno;
-        real val = strtold(nptr.ptr, null);
+        version (WebAssembly) {
+            real val;
+            strtold(nptr.ptr, null, &val);
+        } else {
+            real val = strtold(nptr.ptr, null);
+        }
         snprintf(nptr.ptr, nptr.length, "%#Lg", val);
         errno = err;
     }

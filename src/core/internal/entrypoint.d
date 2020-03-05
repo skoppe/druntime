@@ -45,5 +45,16 @@ template _d_cmain()
                 return main(argc, argv);
             }
         }
+        version (WebAssembly)
+          {
+            import ldc.attributes;
+            import core.sys.wasi.core;
+            void __wasm_call_ctors();
+            pragma(mangle, "_start")
+              @weak export void _start() {
+              __wasm_call_ctors();
+              proc_exit(main(0, null));
+            }
+          }
     }
 }

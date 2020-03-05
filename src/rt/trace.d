@@ -340,7 +340,7 @@ private void trace_times(FILE* fplog, Symbol*[] psymbols)
 
 private void trace_init()
 {
-    synchronized        // protects gtrace_inited
+    static void impl()
     {
         if (!gtrace_inited)
         {
@@ -368,6 +368,10 @@ private void trace_init()
             }
         }
     }
+    version (WebAssembly)
+        impl();
+    else
+        synchronized { impl(); }        // protects gtrace_inited
 }
 
 /////////////////////////////////
@@ -391,7 +395,7 @@ static ~this()
         stack_freelist = n;
     }
 
-    synchronized        // protects groot
+    static void impl()
     {
         // Merge thread local root into global groot
 
@@ -446,6 +450,10 @@ static ~this()
             mergeSymbol(&groot, root);
         }
     }
+    version (WebAssembly)
+        impl();
+    else
+        synchronized { impl(); }        // protects groot
 
     // Free the memory for the thread local symbol table (root)
     static void freeSymbol(Symbol* s)

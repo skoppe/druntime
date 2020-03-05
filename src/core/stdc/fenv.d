@@ -28,21 +28,22 @@ extern (C):
 nothrow:
 @nogc:
 
-version (ARM)     version = ARM_Any;
-version (AArch64) version = ARM_Any;
-version (HPPA)    version = HPPA_Any;
-version (MIPS32)  version = MIPS_Any;
-version (MIPS64)  version = MIPS_Any;
-version (PPC)     version = PPC_Any;
-version (PPC64)   version = PPC_Any;
-version (RISCV32) version = RISCV_Any;
-version (RISCV64) version = RISCV_Any;
-version (S390)    version = IBMZ_Any;
-version (SPARC)   version = SPARC_Any;
-version (SPARC64) version = SPARC_Any;
-version (SystemZ) version = IBMZ_Any;
-version (X86)     version = X86_Any;
-version (X86_64)  version = X86_Any;
+version (ARM)         version = ARM_Any;
+version (AArch64)     version = ARM_Any;
+version (HPPA)        version = HPPA_Any;
+version (MIPS32)      version = MIPS_Any;
+version (MIPS64)      version = MIPS_Any;
+version (PPC)         version = PPC_Any;
+version (PPC64)       version = PPC_Any;
+version (RISCV32)     version = RISCV_Any;
+version (RISCV64)     version = RISCV_Any;
+version (S390)        version = IBMZ_Any;
+version (SPARC)       version = SPARC_Any;
+version (SPARC64)     version = SPARC_Any;
+version (SystemZ)     version = IBMZ_Any;
+version (X86)         version = X86_Any;
+version (X86_64)      version = X86_Any;
+version (WebAssembly) version = WASI_libc; // Always use the WASI libc for translating libc calls to wasi, see https://github.com/CraneStation/wasi-libc
 
 version (MinGW)
     version = GNUFP;
@@ -433,7 +434,14 @@ else version (CRuntime_Musl)
         }
         alias ushort fexcept_t;
     }
-    else
+    else version(WASI_libc)
+    {
+	    struct fenv_t
+	    {
+		    ulong __cw;
+	    }
+	    alias ulong fexcept_t;
+    } else
     {
         static assert(false, "Architecture not supported.");
     }
@@ -503,6 +511,14 @@ else version (CRuntime_UClibc)
     {
         static assert(false, "Architecture not supported.");
     }
+} else
+    version(WASI_libc)
+{
+  struct fenv_t
+  {
+    ulong __cw;
+  }
+  alias ulong fexcept_t;
 }
 else
 {
@@ -785,11 +801,24 @@ else
             FE_TOWARDZERO   = 0x1, ///
         }
     }
+    else version (WASI_libc) // TODO: needs to be WASI
+    {
+      enum
+      {
+        FE_ALL_EXCEPT   = 0x0, ///
+      }
+	    enum
+	    {
+		    FE_TONEAREST    = 0x0, ///
+		    FE_DOWNWARD     = 0x3, /// don't known about these...
+		    FE_UPWARD       = 0x2, /// ...
+		    FE_TOWARDZERO   = 0x1, /// ...
+	    }
+    }
     else
     {
         static assert(0, "Unimplemented architecture");
     }
-
 }
 
 version (GNUFP)
@@ -861,6 +890,11 @@ else version (CRuntime_UClibc)
     ///
     enum FE_DFL_ENV = cast(fenv_t*)(-1);
 }
+ else version (WASI_libc)
+   {
+     enum FE_DFL_ENV = cast(fenv_t*)(-1);
+
+   }
 else
 {
     static assert( false, "Unsupported platform" );

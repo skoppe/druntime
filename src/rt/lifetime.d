@@ -14,7 +14,7 @@ module rt.lifetime;
 
 import core.memory;
 debug(PRINTF) import core.stdc.stdio;
-static import rt.tlsgc;
+version (WebAssembly) {} else static import rt.tlsgc;
 version (LDC) import ldc.attributes;
 
 alias BlkInfo = GC.BlkInfo;
@@ -570,7 +570,8 @@ static ~this()
 }
 
 
-// we expect this to be called with the lock in place
+version (WebAssembly) {} else
+// // we expect this to be called with the lock in place
 void processGCMarks(BlkInfo* cache, scope rt.tlsgc.IsMarkedDg isMarked) nothrow
 {
     // called after the mark routine to eliminate block cache data when it
@@ -2201,6 +2202,8 @@ extern (C) void[] _d_arrayappendcd(ref byte[] x, dchar c)
     return x;
 }
 
+// NOTE: fails in wasm because of exceptions
+version (WebAssembly) {} else
 unittest
 {
     import core.exception : UnicodeException;
@@ -2553,6 +2556,8 @@ unittest
     test(1024 * 1024);
 }
 
+// NOTE: fails in wasm because of exceptions
+version (WebAssembly) {} else
 unittest
 {
     import core.exception;
@@ -2846,7 +2851,9 @@ unittest
     }
 }
 
-// test class finalizers exception handling
+// NOTE: catching expections not supported in wasm
+// // test class finalizers exception handling
+version (WebAssembly) {} else
 unittest
 {
     bool test(E)()
@@ -2881,7 +2888,9 @@ unittest
     assert(!test!InvalidMemoryOperationError);
 }
 
+// NOTE: catching expections not supported in wasm
 // test struct finalizers exception handling
+version (WebAssembly) {} else
 debug(SENTINEL) {} else
 unittest
 {

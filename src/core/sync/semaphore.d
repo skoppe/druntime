@@ -14,6 +14,7 @@
  */
 module core.sync.semaphore;
 
+version (WebAssembly) {} else:
 
 public import core.sync.exception;
 public import core.time;

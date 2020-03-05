@@ -218,6 +218,25 @@ else version (Posix)
         pthread_mutex_unlock(mtx) && assert(0);
     }
 }
+ else version (WebAssembly) {
+   struct Mutex {}
+ @nogc:
+   void initMutex(Mutex* mtx)
+   {
+   }
+
+   void destroyMutex(Mutex* mtx)
+   {
+   }
+
+   void lockMutex(Mutex* mtx)
+   {
+   }
+
+   void unlockMutex(Mutex* mtx)
+   {
+   }
+ }
 else
 {
     static assert(0, "Unsupported platform");

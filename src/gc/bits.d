@@ -15,8 +15,8 @@ module gc.bits;
 
 
 import core.bitop;
-import core.stdc.string;
-import core.stdc.stdlib;
+import core.stdc.string : memset, memcpy;
+import core.stdc.stdlib : free, calloc;
 import core.exception : onOutOfMemoryError;
 
 // use version gcbitsSingleBitOperation to disable optimizations that use
@@ -88,6 +88,13 @@ struct GCBits
     // return non-zero if bit already set
     size_t setLocked(size_t i) nothrow
     {
+      version (WebAssembly) {
+        const pos = i >> BITS_SHIFT;
+        const mask = BITS_1 << (i & BITS_MASK);
+        auto val = *(data + pos) & mask;
+        *(data + pos) = *(data + pos) | mask;
+        return (val & mask) != 0;
+      } else
         version (GNU)
         {
             import gcc.builtins;

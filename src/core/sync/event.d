@@ -11,6 +11,8 @@
  */
 module core.sync.event;
 
+version (WebAssembly) {} else:
+
 version (Windows)
 {
     import core.sys.windows.basetsd /+: HANDLE +/;

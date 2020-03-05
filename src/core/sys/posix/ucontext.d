@@ -1822,6 +1822,23 @@ else version (CRuntime_UClibc)
     else
         static assert(0, "unimplemented");
 }
+else version (WebAssembly) // TODO: needs to be WASI
+{
+  static assert("No wasm in posix...");
+	struct mcontext_t
+	{
+		ulong[32] __space;
+	}
+	struct ucontext_t
+	{
+		ulong uc_flags;
+		ucontext_t *uc_link;
+		stack_t uc_stack;
+		mcontext_t uc_mcontext;
+		sigset_t uc_sigmask;
+		ulong[64] __fpregs_mem;
+	}
+}
 
 //
 // Obsolescent (OB)
@@ -1860,4 +1877,3 @@ version (Solaris)
     int addrtosymstr(uintptr_t, char*, int);
     int printstack(int);
 }
-

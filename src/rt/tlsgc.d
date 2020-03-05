@@ -76,6 +76,7 @@ alias int delegate(void* addr) nothrow IsMarkedDg;
  */
 void processGCMarks(void* data, scope IsMarkedDg dg) nothrow
 {
+    version (WebAssembly) {} else //NOTE: do nothing on wasm. has no tls yet
     // do module specific sweeping
     rt.lifetime.processGCMarks(*(cast(Data*)data).blockInfoCache, dg);
 }

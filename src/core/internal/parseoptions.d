@@ -9,10 +9,7 @@
 
 module core.internal.parseoptions;
 
-import core.stdc.stdlib;
-import core.stdc.stdio;
-import core.stdc.ctype;
-import core.stdc.string;
+import core.stdc.ctype : isspace, isdigit;
 import core.vararg;
 import core.internal.traits : externDFunc;
 
@@ -135,6 +132,7 @@ private:
 
 bool optError(const scope char[] msg, const scope char[] name, const(char)[] errName)
 {
+  import core.stdc.stdio : fprintf, stderr;
     version (unittest) if (inUnittest) return false;
 
     fprintf(stderr, "%.*s %.*s option '%.*s'.\n",
@@ -191,6 +189,7 @@ bool parse(const(char)[] optname, ref inout(char)[] str, ref float res, const(ch
 in { assert(str.length); }
 do
 {
+  import core.stdc.stdio : snprintf, sscanf;
     // % uint f %n \0
     char[1 + 10 + 1 + 2 + 1] fmt=void;
     // specify max-width
@@ -242,6 +241,7 @@ do
 
 bool parseError(const scope char[] exp, const scope char[] opt, const scope char[] got, const(char)[] errName)
 {
+  import core.stdc.stdio : fprintf, stderr;
     version (unittest) if (inUnittest) return false;
 
     fprintf(stderr, "Expecting %.*s as argument for %.*s option '%.*s', got '%.*s' instead.\n",

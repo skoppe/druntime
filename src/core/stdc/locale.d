@@ -22,6 +22,8 @@ else version (TVOS)
     version = Darwin;
 else version (WatchOS)
     version = Darwin;
+else version (WebAssembly)
+  version = WASI;
 
 extern (C):
 @trusted: // Only setlocale operates on C strings.
@@ -280,6 +282,23 @@ else version (CRuntime_UClibc)
     enum LC_MEASUREMENT    = 11;
     ///
     enum LC_IDENTIFICATION = 12;
+}
+else version (WASI)
+{
+    ///
+    enum LC_CTYPE          = 0;
+    ///
+    enum LC_NUMERIC        = 1;
+    ///
+    enum LC_TIME           = 2;
+    ///
+    enum LC_COLLATE        = 3;
+    ///
+    enum LC_MONETARY       = 4;
+    ///
+    enum LC_MESSAGES       = 5;
+    ///
+    enum LC_ALL            = 6;
 }
 else
 {

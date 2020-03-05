@@ -22,30 +22,54 @@ version (LDC)
     inout(T) atomicLoad(MemoryOrder order = MemoryOrder.seq, T)(inout(T)* src) pure nothrow @nogc @trusted
     {
         alias A = _AtomicType!T;
+        version (WebAssembly) {
+          return *src;
+        } else {
         A result = llvm_atomic_load!A(cast(shared A*) src, _ordering!(order));
         return *cast(inout(T)*) &result;
+        }
     }
 
     void atomicStore(MemoryOrder order = MemoryOrder.seq, T)(T* dest, T value) pure nothrow @nogc @trusted
     {
         alias A = _AtomicType!T;
+        version (WebAssembly) {
+          *dest = value;
+        } else
         llvm_atomic_store!A(*cast(A*) &value, cast(shared A*) dest, _ordering!(order));
     }
 
     T atomicExchange(MemoryOrder order = MemoryOrder.seq, bool result = true, T)(T* dest, T value) pure nothrow @nogc @trusted
     {
         alias A = _AtomicType!T;
+        version (WebAssembly) {
+          auto old = *dest;
+          *dest = value;
+          return old;
+        } else {
         A result = llvm_atomic_rmw_xchg!A(cast(shared A*) dest, *cast(A*) &value, _ordering!(order));
         return *cast(T*) &result;
+        }
     }
 
     bool atomicCompareExchange(bool weak = false, MemoryOrder succ = MemoryOrder.seq, MemoryOrder fail = MemoryOrder.seq, T)(T* dest, T* compare, T value) pure nothrow @nogc @trusted
     {
         alias A = _AtomicType!T;
+        version (WebAssembly) {
+          // TODO: WebAssembly has no atomic ops yet
+          import core.stdc.string : memcmp;
+          if (memcmp(cast(void*)dest, cast(void*)compare, T.sizeof) == 0) {
+            *dest = value;
+            return true;
+          }
+          *compare = *dest;
+          return false;
+        } else {
         auto result = llvm_atomic_cmp_xchg!A(cast(shared A*) dest, *cast(A*) compare, *cast(A*) &value,
             _ordering!(succ), _ordering!(fail), weak);
         *compare = *cast(T*) &result.previousValue;
         return result.exchanged;
+        }
     }
     bool atomicCompareExchangeWeak(MemoryOrder succ = MemoryOrder.seq, MemoryOrder fail = MemoryOrder.seq, T)(T* dest, T* compare, T value) pure nothrow @nogc @trusted
     {
@@ -59,9 +83,19 @@ version (LDC)
     bool atomicCompareExchangeNoResult(bool weak = false, MemoryOrder succ = MemoryOrder.seq, MemoryOrder fail = MemoryOrder.seq, T)(T* dest, const T compare, T value) pure nothrow @nogc @trusted
     {
         alias A = _AtomicType!T;
+        version (WebAssembly) {
+          // TODO: WebAssembly has no atomic ops yet
+          import core.stdc.string : memcmp;
+          if (memcmp(cast(void*)dest, cast(void*)&compare, T.sizeof) == 0) {
+            *dest = value;
+            return true;
+          }
+          return false;
+        } else {
         auto result = llvm_atomic_cmp_xchg!A(cast(shared A*) dest, *cast(A*) &compare, *cast(A*) &value,
             _ordering!(succ), _ordering!(fail), weak);
         return result.exchanged;
+        }
     }
     bool atomicCompareExchangeStrongNoResult(MemoryOrder succ = MemoryOrder.seq, MemoryOrder fail = MemoryOrder.seq, T)(T* dest, const T compare, T value) pure nothrow @nogc @trusted
     {
@@ -70,6 +104,7 @@ version (LDC)
 
     void atomicFence(MemoryOrder order = MemoryOrder.seq)() pure nothrow @nogc @trusted
     {
+      version (WebAssembly) {} else
         llvm_memory_fence(_ordering!(order));
     }
 

@@ -15,7 +15,6 @@
  */
 module core.sync.mutex;
 
-
 public import core.sync.exception;
 
 version (Windows)
@@ -27,6 +26,173 @@ version (Windows)
 else version (Posix)
 {
     private import core.sys.posix.pthread;
+}
+else version (WebAssembly)
+{
+class Mutex :
+    Object.Monitor
+{
+    ////////////////////////////////////////////////////////////////////////////
+    // Initialization
+    ////////////////////////////////////////////////////////////////////////////
+
+
+    /**
+     * Initializes a mutex object.
+     *
+     */
+    this() @trusted nothrow @nogc
+    {
+        this(true);
+    }
+
+    /// ditto
+    this() shared @trusted nothrow @nogc
+    {
+        this(true);
+    }
+
+    // Undocumented, useful only in Mutex.this().
+    private this(this Q)(bool _unused_) @trusted nothrow @nogc
+        if (is(Q == Mutex) || is(Q == shared Mutex))
+    {
+        m_proxy.link = this;
+        this.__monitor = cast(void*) &m_proxy;
+    }
+
+
+    /**
+     * Initializes a mutex object and sets it as the monitor for `obj`.
+     *
+     * In:
+     *  `obj` must not already have a monitor.
+     */
+    this(Object obj) @trusted nothrow @nogc
+    {
+        this(obj, true);
+    }
+
+    /// ditto
+    this(Object obj) shared @trusted nothrow @nogc
+    {
+        this(obj, true);
+    }
+
+    // Undocumented, useful only in Mutex.this(Object).
+    private this(this Q)(Object obj, bool _unused_) @trusted nothrow @nogc
+        if (is(Q == Mutex) || is(Q == shared Mutex))
+    in
+    {
+        assert(obj !is null,
+            "The provided object must not be null.");
+        assert(obj.__monitor is null,
+            "The provided object has a monitor already set!");
+    }
+    do
+    {
+        this();
+        obj.__monitor = cast(void*) &m_proxy;
+    }
+
+
+    ~this() @trusted nothrow @nogc
+    {
+        this.__monitor = null;
+    }
+
+
+    ////////////////////////////////////////////////////////////////////////////
+    // General Actions
+    ////////////////////////////////////////////////////////////////////////////
+
+
+    /**
+     * If this lock is not already held by the caller, the lock is acquired,
+     * then the internal counter is incremented by one.
+     *
+     * Note:
+     *    `Mutex.lock` does not throw, but a class derived from Mutex can throw.
+     *    Use `lock_nothrow` in `nothrow @nogc` code.
+     */
+    @trusted void lock()
+    {
+    }
+
+    /// ditto
+    @trusted void lock() shared
+    {
+    }
+
+    /// ditto
+    final void lock_nothrow(this Q)() nothrow @trusted @nogc
+        if (is(Q == Mutex) || is(Q == shared Mutex))
+    {
+    }
+
+    /**
+     * Decrements the internal lock count by one.  If this brings the count to
+     * zero, the lock is released.
+     *
+     * Note:
+     *    `Mutex.unlock` does not throw, but a class derived from Mutex can throw.
+     *    Use `unlock_nothrow` in `nothrow @nogc` code.
+     */
+    @trusted void unlock()
+    {
+    }
+
+    /// ditto
+    @trusted void unlock() shared
+    {
+    }
+
+    /// ditto
+    final void unlock_nothrow(this Q)() nothrow @trusted @nogc
+        if (is(Q == Mutex) || is(Q == shared Mutex))
+    {
+    }
+
+    /**
+     * If the lock is held by another caller, the method returns.  Otherwise,
+     * the lock is acquired if it is not already held, and then the internal
+     * counter is incremented by one.
+     *
+     * Returns:
+     *  true if the lock was acquired and false if not.
+     *
+     * Note:
+     *    `Mutex.tryLock` does not throw, but a class derived from Mutex can throw.
+     *    Use `tryLock_nothrow` in `nothrow @nogc` code.
+     */
+    bool tryLock() @trusted
+    {
+        return tryLock_nothrow();
+    }
+
+    /// ditto
+    bool tryLock() shared @trusted
+    {
+        return tryLock_nothrow();
+    }
+
+    /// ditto
+    final bool tryLock_nothrow(this Q)() nothrow @trusted @nogc
+        if (is(Q == Mutex) || is(Q == shared Mutex))
+    {
+      return true;
+    }
+
+
+private:
+    struct MonitorProxy
+    {
+        Object.Monitor link;
+    }
+
+    MonitorProxy            m_proxy;
+
+
+}
 }
 else
 {
@@ -42,6 +208,7 @@ else
 ////////////////////////////////////////////////////////////////////////////////
 
 
+version (WebAssembly) {} else
 /**
  * This class represents a general purpose, recursive mutex.
  *
@@ -302,6 +469,7 @@ package:
 ///
 /* @safe nothrow -> see druntime PR 1726 */
 // Test regular usage.
+version (WebAssembly) {} else // TODO: no threads yet
 unittest
 {
     import core.thread : Thread;
@@ -381,6 +549,7 @@ unittest
     version (CRuntime_Musl) {} else
     version (DragonFlyBSD) {} else
     version (Solaris) {} else
+    version (WebAssembly) {} else // for wasm we assume single thread so all locks and unlocks are no-ops
     assert(!mtx.tryLock_nothrow());
 
     free(cast(void*) mtx);
@@ -399,6 +568,7 @@ unittest
     m.unlock();
 }
 
+version (WebAssembly) {} else // TODO: no threads yet
 unittest
 {
     import core.thread;

@@ -33,6 +33,7 @@ module gc.impl.conservative.gc;
 //debug = PROFILE_API;          // profile API calls for config.profile > 1
 
 /***************************************************/
+version (WebAssembly) {} else
 version = COLLECT_PARALLEL;  // parallel scanning
 
 import gc.bits;
@@ -47,6 +48,8 @@ import core.stdc.string : memcpy, memset, memmove;
 import core.bitop;
 import core.thread;
 static import core.memory;
+
+version (WebAssembly) {} else { version = HasThreads; }
 
 version (GNU) import gcc.builtins;
 
@@ -979,7 +982,7 @@ class ConservativeGC : GC
     }
 
 
-    bool inFinalizer() nothrow @nogc
+    bool inFinalizer() nothrow @nogc @trusted // TODO: remove after wasm has nos tls anymore
     {
         return _inFinalizer;
     }
@@ -2263,7 +2266,16 @@ struct Gcx
         {
             debug(COLLECT_PRINTF) printf("\tscan stacks.\n");
             // Scan stacks and registers for each paused thread
-            thread_scanAll(&markFn);
+            version (HasThreads) thread_scanAll(&markFn);
+            else version (WebAssembly) {
+              // TODO: very rudimentary stack scanning (no consideration for registers)
+              void *stack_top = void;
+              void *stack_bottom;
+              stack_top = &stack_top;
+              import rt.sections_ldc;
+              stack_bottom = cast(void*)&__heap_base;
+              markFn(stack_top, stack_bottom);
+            }
         }
 
         // Scan roots[]
@@ -2587,8 +2599,10 @@ struct Gcx
         // part of `thread_attachThis` implementation). In that case it is
         // better not to try actually collecting anything
 
+      version (HasThreads) {
         if (Thread.getThis() is null)
             return 0;
+      }
 
         MonoTime start, stop, begin;
         begin = start = currTime;
@@ -2616,7 +2630,7 @@ struct Gcx
                 rangesLock.unlock();
                 rootsLock.unlock();
             }
-            thread_suspendAll();
+            version (HasThreads) thread_suspendAll();
 
             prepare();
 
@@ -2637,8 +2651,10 @@ struct Gcx
                     markAll!markConservative(nostack);
             }
 
-            thread_processGCMarks(&isMarked);
-            thread_resumeAll();
+            version (HasThreads) {
+              thread_processGCMarks(&isMarked);
+              thread_resumeAll();
+            }
         }
 
         stop = currTime;
@@ -3974,6 +3990,7 @@ unittest // bugzilla 15822
     GC.collect();
 }
 
+version (WebAssembly) {} else
 unittest // bugzilla 1180
 {
     import core.exception;

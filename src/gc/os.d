@@ -14,7 +14,30 @@
 module gc.os;
 
 
-version (Windows)
+version (WebAssembly)
+{
+   nothrow:
+   private __gshared void* wasmFreeList = null;
+   __gshared void* wasmStart = null;
+   enum WasmPageSize = 64*1024;
+
+   // returns amount of 64Kb pages
+   pragma(LDC_intrinsic, "llvm.wasm.memory.size.i32")
+      private int _wasmMemorySize(int memIndex) @safe pure nothrow @nogc;
+
+   pragma(inline, true) auto wasmMemorySize() @safe pure nothrow @nogc {
+      return _wasmMemorySize(0);
+   }
+
+   // adjust memory according to delta (64Kb pages)
+   pragma(LDC_intrinsic, "llvm.wasm.memory.grow.i32")
+      int _wasmMemoryGrow(int memIndex, int delta) @safe pure nothrow @nogc;
+
+   pragma(inline, true)
+      auto wasmMemoryGrow(int delta) @safe pure nothrow @nogc {
+      return _wasmMemoryGrow(0, delta);
+   }
+} else version (Windows)
 {
     import core.sys.windows.winbase : GetCurrentThreadId, VirtualAlloc, VirtualFree;
     import core.sys.windows.winnt : MEM_COMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_READWRITE;
@@ -130,7 +153,7 @@ else static if (is(typeof(malloc))) // else version (GC_Use_Alloc_Malloc)
     //       after PAGESIZE bytes used by the GC.
 
 
-    import gc.gc;
+    // import gc.gc;
 
 
     const size_t PAGE_MASK = PAGESIZE - 1;
@@ -151,10 +174,108 @@ else static if (is(typeof(malloc))) // else version (GC_Use_Alloc_Malloc)
         return 0;
     }
 }
-else
+else version (WebAssembly)
 {
-    static assert(false, "No supported allocation methods available.");
-}
+    // NOTE: a very simple allocater with a coalescing freelist
+    private __gshared void* freelist = null;
+    struct FreeListItem {
+        size_t bytes;
+        FreeListItem* next;
+    }
+    private void push(void* base, size_t nbytes) nothrow @trusted {
+        // insert the item and maintains a sorted freelist
+        // returns the item before the insertion (or the first)
+        static FreeListItem* insert(FreeListItem* item) nothrow @trusted {
+            // if it should be first
+            if (item < freelist) {
+                item.next = cast(FreeListItem*)freelist;
+                freelist = cast(void*)item;
+                return item;
+            }
+            // insert sorted on address
+            auto p = cast(FreeListItem*)freelist;
+            for(;;) {
+                if (!p.next) {
+                    p.next = item;
+                    return p;
+                }
+                if (item < p.next) {
+                    item.next = p.next;
+                    p.next = item;
+                    return p;
+                }
+                p = p.next;
+            }
+            assert(0);
+        }
+        static void coalesce(FreeListItem* item) nothrow @trusted {
+            for (;;) {
+                if (!item.next)
+                    return;
+                if (cast(void*)item + item.bytes !is item.next)
+                    return;
+                item.bytes += item.next.bytes;
+                item.next = item.next.next;
+            }
+        }
+        auto item = cast(FreeListItem*)(base);
+        item.bytes = nbytes;
+        if (freelist is null) {
+            freelist = cast(void*)item;
+            item.next = null;
+        } else {
+            coalesce(insert(item));
+        }
+    }
+    private void[] pop(size_t nbytes) nothrow @trusted {
+        if (freelist is null)
+            return [];
+        auto prev = cast(FreeListItem**)&freelist;
+        auto p = cast(FreeListItem*)freelist;
+        for (;;) {
+            if (p.bytes >= nbytes) {
+                auto mem = (cast(void*)p)[0..nbytes];
+                if (p.bytes - nbytes > 0) {
+                    auto newItem = cast(FreeListItem*)(cast(void*)p + nbytes);
+                    newItem.bytes = p.bytes - nbytes;
+                    (*prev) = newItem;
+                } else
+                    (*prev) = p.next;
+                return mem;
+            }
+            if (p.next is null)
+                return [];
+            prev = &p.next;
+            p = p.next;
+        }
+    }
+
+    void *os_mem_map(size_t nbytes) nothrow @trusted
+    {
+        if (wasmStart is null)
+            wasmStart = cast(void*)(wasmMemorySize() * WasmPageSize);
+        auto mem = pop(nbytes);
+        if (mem == null || mem.length == 0) {
+            int pages = cast(int)((nbytes + WasmPageSize - 1) >> 16);
+            auto currentPages = wasmMemoryGrow(pages);
+            auto addr = cast(void*)(currentPages * WasmPageSize);
+            mem = addr[0 .. pages * WasmPageSize];
+        } else {
+        }
+        if (mem.length > nbytes) {
+            push(&mem[0] + nbytes, mem.length - nbytes);
+        }
+        return &mem[0];
+    }
+
+    int os_mem_unmap(void *base, size_t nbytes) nothrow @safe
+    {
+        push(base, nbytes);
+        return 0;
+    }
+
+} else
+      static assert(false, "No supported allocation methods available.");
 
 /**
    Check for any kind of memory pressure.

@@ -22,6 +22,10 @@ extern (C):
 nothrow:
 @nogc:
 
+version (WebAssembly) {
+  version = WASI;
+}
+
 version (CRuntime_DigitalMars)
 {
     /***
@@ -105,6 +109,10 @@ else version (CRuntime_UClibc)
 else version (Solaris)
 {
     void __assert_c99(const(char)* exp, const(char)* file, uint line, const(char)* func);
+}
+else version (WASI)
+{
+    void __assert_fail(const(char)* exp, const(char)* file, uint line, const(char)* func);
 }
 else
 {

@@ -49,11 +49,15 @@ extern (C)
     @weak // LDC
     {
         pragma(inline, false);
+        version (WebAssembly) {
+          return &_d_register_conservative_gc;
+        } else {
         // do not call, they register implicitly through pragma(crt_constructor)
         // avoid being optimized away
         auto reg1 = &_d_register_conservative_gc;
         auto reg2 = &_d_register_manual_gc;
         return reg1 < reg2 ? reg1 : reg2;
+        }
     }
 
     void gc_init()
@@ -68,11 +72,16 @@ extern (C)
             if (newInstance is null)
             {
                 import core.stdc.stdio : fprintf, stderr;
-                import core.stdc.stdlib : exit;
 
                 fprintf(stderr, "No GC was initialized, please recheck the name of the selected GC ('%.*s').\n", cast(int)config.gc.length, config.gc.ptr);
                 instanceLock.unlock();
-                exit(1);
+                version (WebAssembly) {
+                  import core.sys.wasi.core: proc_exit;
+                  proc_exit(1);
+                } else {
+                  import core.stdc.stdlib : exit;
+                  exit(1);
+                }
 
                 // Shouldn't get here.
                 assert(0);

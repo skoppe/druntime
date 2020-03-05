@@ -24,21 +24,22 @@ else version (TVOS)
 else version (WatchOS)
     version = Darwin;
 
-version (ARM)     version = ARM_Any;
-version (AArch64) version = ARM_Any;
-version (HPPA)    version = HPPA_Any;
-version (MIPS32)  version = MIPS_Any;
-version (MIPS64)  version = MIPS_Any;
-version (PPC)     version = PPC_Any;
-version (PPC64)   version = PPC_Any;
-version (RISCV32) version = RISCV_Any;
-version (RISCV64) version = RISCV_Any;
-version (S390)    version = IBMZ_Any;
-version (SPARC)   version = SPARC_Any;
-version (SPARC64) version = SPARC_Any;
-version (SystemZ) version = IBMZ_Any;
-version (X86)     version = X86_Any;
-version (X86_64)  version = X86_Any;
+version (ARM)         version = ARM_Any;
+version (AArch64)     version = ARM_Any;
+version (HPPA)        version = HPPA_Any;
+version (MIPS32)      version = MIPS_Any;
+version (MIPS64)      version = MIPS_Any;
+version (PPC)         version = PPC_Any;
+version (PPC64)       version = PPC_Any;
+version (RISCV32)     version = RISCV_Any;
+version (RISCV64)     version = RISCV_Any;
+version (S390)        version = IBMZ_Any;
+version (SPARC)       version = SPARC_Any;
+version (SPARC64)     version = SPARC_Any;
+version (SystemZ)     version = IBMZ_Any;
+version (X86)         version = X86_Any;
+version (X86_64)      version = X86_Any;
+version (WebAssembly) version = WASI_libc; // Always use the WASI libc for translating libc calls to wasi, see https://github.com/CraneStation/wasi-libc
 
 extern (C):
 @trusted: // All functions here operate on floating point and integer values only.
@@ -1560,6 +1561,138 @@ else version (CRuntime_Bionic)
     pure int signbit(double x)       { return __signbit(x); }
     ///
     pure int signbit(real x)         { return __signbitl(x); }
+  }
+}
+ else version (WASI_libc)
+{
+    enum
+    {
+        ///
+        FP_NAN,
+        ///
+        FP_INFINITE,
+        ///
+        FP_ZERO,
+        ///
+        FP_SUBNORMAL,
+        ///
+        FP_NORMAL,
+    }
+
+    enum
+    {
+        ///
+        FP_FAST_FMA  = 0,
+        ///
+        FP_FAST_FMAF = 0,
+        ///
+        FP_FAST_FMAL = 0,
+    }
+
+  pure {
+    int __fpclassifyf(float x);
+    int __fpclassify(double x);
+    int __fpclassifyl(real x);
+
+    int __signbitf(float x);
+    int __signbit(double x);
+    int __signbitl(real x);
+  }
+
+  extern (D) pure
+  {
+    //int fpclassify(real-floating x);
+      ///
+    int fpclassify(float x)     { return __fpclassifyf(x); }
+    ///
+    int fpclassify(double x)    { return __fpclassify(x);  }
+    ///
+    int fpclassify(real x)
+    {
+        return (real.sizeof == double.sizeof)
+            ? __fpclassify(x)
+            : __fpclassifyl(x);
+    }
+    private uint __FLOAT_BITS(float __f)
+    {
+        union __u_t {
+            float __f;
+            uint __i;
+        }
+        __u_t __u;
+        __u.__f = __f;
+        return __u.__i;
+    }
+    private ulong __DOUBLE_BITS(double __f)
+    {
+        union __u_t {
+            double __f;
+            ulong __i;
+        }
+        __u_t __u;
+        __u.__f = __f;
+        return __u.__i;
+    }
+
+    //int isfinite(real-floating x);
+    ///
+    int isfinite(float x)       { return (__FLOAT_BITS(x) & 0x7fffffff) < 0x7f800000; }
+    ///
+    int isfinite(double x)      { return (__DOUBLE_BITS(x) & -1UL>>1) < 0x7ffUL<<52;  }
+    ///
+    int isfinite(real x)
+    {
+        return (real.sizeof == double.sizeof)
+            ? isfinite(cast(double)x)
+            : __fpclassifyl(x) > FP_INFINITE;
+    }
+
+    //int isinf(real-floating x);
+    ///
+    int isinf(float x)          { return (__FLOAT_BITS(x) & 0x7fffffff) == 0x7f800000;  }
+    ///
+    int isinf(double x)         { return (__DOUBLE_BITS(x) & -1UL>>1) == 0x7ffUL<<52;   }
+    ///
+    int isinf(real x)
+    {
+        return (real.sizeof == double.sizeof)
+            ? isinf(cast(double)x)
+            : __fpclassifyl(x) == FP_INFINITE;
+    }
+
+    //int isnan(real-floating x);
+    ///
+    int isnan(float x)          { return (__FLOAT_BITS(x) & 0x7fffffff) > 0x7f800000;  }
+    ///
+    int isnan(double x)         { return (__DOUBLE_BITS(x) & -1UL>>1) > 0x7ffUL<<52;   }
+    ///
+    int isnan(real x)
+    {
+        return (real.sizeof == double.sizeof)
+            ? isnan(cast(double)x)
+            : __fpclassifyl(x) == FP_NAN;
+    }
+
+    //int isnormal(real-floating x);
+    ///
+    int isnormal(float x)       { return fpclassify(x) == FP_NORMAL; }
+    ///
+    int isnormal(double x)      { return fpclassify(x) == FP_NORMAL; }
+    ///
+    int isnormal(real x)        { return fpclassify(x) == FP_NORMAL; }
+
+    //int signbit(real-floating x);
+    ///
+    int signbit(float x)     { return __signbitf(x); }
+    ///
+    int signbit(double x)    { return __signbit(x);  }
+    ///
+    int signbit(real x)
+    {
+        return (real.sizeof == double.sizeof)
+            ? __signbit(x)
+            : __signbitl(x);
+    }
   }
 }
 
@@ -3981,6 +4114,411 @@ else version (CRuntime_Bionic)
     pure float   fmaf(float x, float y, float z);
     /// Added since Lollipop
     pure real    fmal(real x, real y, real z);
+}
+ else version (WASI_libc)
+{
+  // TODO: got linker function signature mismatches with the real version
+  // so we wrap 'long double' to double
+
+    ///
+    double  acos(double x);
+    ///
+    float   acosf(float x);
+    ///
+    extern(D) real    acosl(real x) { return acos(cast(double) x); }
+
+    ///
+    double  asin(double x);
+    ///
+    float   asinf(float x);
+    ///
+    extern(D) real    asinl(real x) { return asin(cast(double) x); }
+
+    ///
+    pure double  atan(double x);
+    ///
+    pure float   atanf(float x);
+    ///
+    extern(D) pure real    atanl(real x) { return atan(cast(double) x); }
+
+    ///
+    double  atan2(double y, double x);
+    ///
+    float   atan2f(float y, float x);
+    ///
+    extern(D) real    atan2l(real y, real x) { return atan2(cast(double) x, cast(double) y); }
+
+    ///
+    pure double  cos(double x);
+    ///
+    pure float   cosf(float x);
+    ///
+    extern(D) pure real    cosl(real x) { return cos(cast(double) x); }
+
+    ///
+    pure double  sin(double x);
+    ///
+    pure float   sinf(float x);
+    ///
+    extern(D) pure real    sinl(real x) { return sin(cast(double) x); }
+
+    ///
+    pure double  tan(double x);
+    ///
+    pure float   tanf(float x);
+    ///
+    extern(D) pure real    tanl(real x) { return tan(cast(double) x); }
+
+    ///
+    double  acosh(double x);
+    ///
+    float   acoshf(float x);
+    ///
+    extern(D) real    acoshl(real x) { return acosh(cast(double) x); }
+
+    ///
+    pure double  asinh(double x);
+    ///
+    pure float   asinhf(float x);
+    ///
+    extern(D) pure real    asinhl(real x) { return asinh(cast(double) x); }
+
+    ///
+    double  atanh(double x);
+    ///
+    float   atanhf(float x);
+    ///
+    extern(D) real    atanhl(real x) { return atanh(cast(double) x); }
+
+    ///
+    double  cosh(double x);
+    ///
+    float   coshf(float x);
+    ///
+    extern(D) real    coshl(real x) { return cosh(cast(double) x); }
+
+    ///
+    double  sinh(double x);
+    ///
+    float   sinhf(float x);
+    ///
+    extern(D) real    sinhl(real x) { return sinh(cast(double) x); }
+
+    ///
+    double  tanh(double x);
+    ///
+    float   tanhf(float x);
+    ///
+    extern(D) real    tanhl(real x) { return tanh(cast(double) x); }
+
+    ///
+    double  exp(double x);
+    ///
+    float   expf(float x);
+    ///
+    extern(D) real    expl(real x) { return exp(cast(double) x); }
+
+    ///
+    double  exp2(double x);
+    ///
+    float   exp2f(float x);
+    ///
+    extern(D) real    exp2l(real x) { return exp2(cast(double) x); }
+
+    ///
+    double  expm1(double x);
+    ///
+    float   expm1f(float x);
+    ///
+    extern(D) real    expm1l(real x) { return expm1(cast(double) x); }
+
+    ///
+    pure double  frexp(double value, int* exp);
+    ///
+    pure float   frexpf(float value, int* exp);
+    ///
+    extern(D) pure real    frexpl(real value, int* exp) { return frexp(cast(double) value, exp); }
+
+    ///
+    int     ilogb(double x);
+    ///
+    int     ilogbf(float x);
+    ///
+    extern(D) int     ilogbl(real x) { return ilogb(cast(double) x); }
+
+    ///
+    double  ldexp(double x, int exp);
+    ///
+    float   ldexpf(float x, int exp);
+    ///
+    extern(D) real    ldexpl(real x, int exp) { return ldexp(cast(double) x, exp); }
+
+    ///
+    double  log(double x);
+    ///
+    float   logf(float x);
+    ///
+    extern(D) real    logl(real x) { return log(cast(double) x); }
+
+    ///
+    double  log10(double x);
+    ///
+    float   log10f(float x);
+    ///
+    extern(D) real    log10l(real x) { return log10(cast(double) x); }
+
+    ///
+    double  log1p(double x);
+    ///
+    float   log1pf(float x);
+    ///
+    extern(D) real    log1pl(real x) { return log1p(cast(double) x); }
+
+    ///
+    double  log2(double x);
+    ///
+    float   log2f(float x);
+    ///
+    extern(D) real    log2l(real x) { return log2(cast(double) x); }
+
+    ///
+    double  logb(double x);
+    ///
+    float   logbf(float x);
+    ///
+    extern(D) real    logbl(real x) { return logb(cast(double) x); }
+
+    ///
+    pure double  modf(double value, double* iptr);
+    ///
+    pure float   modff(float value, float* iptr);
+    ///
+    extern(D) pure real    modfl(real value, real *iptr) { return modf(cast(double) value, cast(double*) iptr); }
+
+    ///
+    double  scalbn(double x, int n);
+    ///
+    float   scalbnf(float x, int n);
+    ///
+    extern(D) real    scalbnl(real x, int n) { return scalbln(cast(double) x, n); }
+
+    ///
+    double  scalbln(double x, c_long n);
+    ///
+    float   scalblnf(float x, c_long n);
+    ///
+    extern(D) real    scalblnl(real x, c_long n) { return scalbln(cast(double) x, n); }
+
+    ///
+    pure double  cbrt(double x);
+    ///
+    pure float   cbrtf(float x);
+    ///
+    extern(D) pure real    cbrtl(real x) { return cbrt(cast(double) x); }
+
+    ///
+    pure double  fabs(double x);
+    ///
+    pure float   fabsf(float x);
+    ///
+    extern(D) pure real    fabsl(real x) { return fabs(cast(double) x); }
+
+    ///
+    double  hypot(double x, double y);
+    ///
+    float   hypotf(float x, float y);
+    ///
+    extern(D) real    hypotl(real x, real y) { return hypot(cast(double) x, cast(double) y); }
+
+    ///
+    double  pow(double x, double y);
+    ///
+    float   powf(float x, float y);
+    ///
+    extern(D) real    powl(real x, real y) { return pow(cast(double) x, cast(double) y); }
+
+    ///
+    double  sqrt(double x);
+    ///
+    float   sqrtf(float x);
+    ///
+    extern(D) real    sqrtl(real x) { return sqrt(cast(double) x); }
+
+    ///
+    pure double  erf(double x);
+    ///
+    pure float   erff(float x);
+    ///
+    extern(D) pure real    erfl(real x) { return erf(cast(double) x); }
+
+    ///
+    double  erfc(double x);
+    ///
+    float   erfcf(float x);
+    ///
+    extern(D) real    erfcl(real x) { return erfc(cast(double) x); }
+
+    ///
+    double  lgamma(double x);
+    ///
+    float   lgammaf(float x);
+    ///
+    extern(D) real    lgammal(real x) { return lgamma(cast(double) x); }
+
+    ///
+    double  tgamma(double x);
+    ///
+    float   tgammaf(float x);
+    ///
+    extern(D) real    tgammal(real x) { return tgamma(cast(double) x); }
+
+    ///
+    pure double  ceil(double x);
+    ///
+    pure float   ceilf(float x);
+    ///
+    extern(D) pure real    ceill(real x) { return ceil(cast(double) x); }
+
+    ///
+    pure double  floor(double x);
+    ///
+    pure float   floorf(float x);
+    ///
+    extern(D) pure real    floorl(real x) { return floor(cast(double) x); }
+
+    ///
+    pure double  nearbyint(double x);
+    ///
+    pure float   nearbyintf(float x);
+    ///
+    extern(D) pure real    nearbyintl(real x) { return nearbyint(cast(double) x); }
+
+    ///
+    pure double  rint(double x);
+    ///
+    pure float   rintf(float x);
+    ///
+    extern(D) pure real    rintl(real x) { return rint(cast(double) x); }
+
+    ///
+    c_long  lrint(double x);
+    ///
+    c_long  lrintf(float x);
+    ///
+    extern(D) c_long  lrintl(real x) { return lrint(cast(double) x); }
+
+    ///
+    long    llrint(double x);
+    ///
+    long    llrintf(float x);
+    ///
+    extern(D) long    llrintl(real x) { return llrint(cast(double) x); }
+
+    ///
+    pure double  round(double x);
+    ///
+    pure float   roundf(float x);
+    ///
+    extern(D) pure real    roundl(real x) { return round(cast(double) x); }
+
+    ///
+    c_long  lround(double x);
+    ///
+    c_long  lroundf(float x);
+    ///
+    extern(D) c_long  lroundl(real x) { return lround(cast(double) x); }
+
+    ///
+    long    llround(double x);
+    ///
+    long    llroundf(float x);
+    ///
+    extern(D) long    llroundl()(real x) { return llround(cast(double) x); }
+
+    ///
+    pure double  trunc(double x);
+    ///
+    pure float   truncf(float x);
+    ///
+    extern(D) pure real    truncl(real x) { return trunc(cast(double) x); }
+
+    ///
+    double  fmod(double x, double y);
+    ///
+    float   fmodf(float x, float y);
+    ///
+    extern(D) real    fmodl(real x, real y) { return fmod(cast(double) x, cast(double) y); }
+
+    ///
+    double  remainder(double x, double y);
+    ///
+    float   remainderf(float x, float y);
+    ///
+    extern(D) real    remainderl(real x, real y) { return remainder(cast(double) x, cast(double) y); }
+
+    ///
+    double  remquo(double x, double y, int* quo);
+    ///
+    float   remquof(float x, float y, int* quo);
+    ///
+    extern(D) real    remquol(real x, real y, int* quo) { return remquo(cast(double) x, cast(double) y, quo); }
+
+    ///
+    pure double  copysign(double x, double y);
+    ///
+    pure float   copysignf(float x, float y);
+    ///
+    extern(D) pure real    copysignl(real x, real y) { return copysign(cast(double) x, cast(double) y); }
+
+    ///
+    pure double  nan(char* tagp);
+    ///
+    pure float   nanf(char* tagp);
+    ///
+    extern(D) pure real    nanl(char* tagp) { return nan(tagp); }
+
+    ///
+    double  nextafter(double x, double y);
+    ///
+    float   nextafterf(float x, float y);
+    ///
+    extern(D) real    nextafterl(real x, real y) { return nextafter(cast(double) x, cast(double) y); }
+
+    // TODO: function signature mismatch with reals
+    // ///
+    // double  nexttoward(double x, real y);
+    // ///
+    // float   nexttowardf(float x, real y);
+    // ///
+    // extern(D) real    nexttowardl(real x, real y) { return nexttoward(cast(double) x, cast(double) y); }
+
+    ///
+    double  fdim(double x, double y);
+    ///
+    float   fdimf(float x, float y);
+    ///
+    extern(D) real    fdiml(real x, real y) { return fdim(cast(double) x, cast(double) y); }
+
+    ///
+    pure double  fmax(double x, double y);
+    ///
+    pure float   fmaxf(float x, float y);
+    ///
+    extern(D) pure real    fmaxl(real x, real y) { return fmax(cast(double) x, cast(double) y); }
+
+    ///
+    pure double  fmin(double x, double y);
+    ///
+    pure float   fminf(float x, float y);
+    ///
+    extern(D) pure real    fminl(real x, real y) { return fmin(cast(double) x, cast(double) y); }
+
+    ///
+    pure double  fma(double x, double y, double z);
+    ///
+    pure float   fmaf(float x, float y, float z);
+    ///
+    extern(D) pure real    fmal(real x, real y, real z) { return fma(cast(double) x, cast(double) y, cast(double) z); }
 }
 else version (CRuntime_UClibc)
 {

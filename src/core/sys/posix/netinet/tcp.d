@@ -67,3 +67,8 @@ else version (linux)
 {
     enum TCP_NODELAY = 1;
 }
+else version (WebAssembly) // TODO: needs to be WASI
+{
+  static assert("No wasm in posix...");
+    enum TCP_NODELAY = 1;
+}

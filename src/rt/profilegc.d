@@ -94,8 +94,7 @@ static ~this()
 {
     if (newCounts.length)
     {
-        synchronized
-        {
+        version (WebAssembly) { // NOTE: synchronized blocks call critsecsize in ldc which is unknown for wasm
             foreach (name, entry; newCounts)
             {
                 if (!(name in globalNewCounts))
@@ -103,6 +102,18 @@ static ~this()
 
                 globalNewCounts[name].count += entry.count;
                 globalNewCounts[name].size += entry.size;
+            }
+        } else {
+            synchronized
+            {
+                foreach (name, entry; newCounts)
+                {
+                    if (!(name in globalNewCounts))
+                        globalNewCounts[name] = Entry.init;
+
+                    globalNewCounts[name].count += entry.count;
+                    globalNewCounts[name].size += entry.size;
+                }
             }
         }
         newCounts.reset();

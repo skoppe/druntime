@@ -868,6 +868,8 @@ void runModuleFuncsRev(alias getfp)(const(immutable(ModuleInfo)*)[] modules)
     }
 }
 
+// NOTE: fails in wasm because of exceptions
+version (WebAssembly) {} else
 unittest
 {
     static void assertThrown(T : Throwable, E)(lazy E expr, string msg)

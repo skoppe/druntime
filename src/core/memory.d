@@ -872,6 +872,7 @@ struct GC
         assert(!GC.inFinalizer);
     }
 
+    version (WebAssembly) {} else
     ///
     unittest
     {
@@ -1085,7 +1086,7 @@ else
 
     private @property void fakePureErrno()(int newValue) @nogc nothrow pure @system
     {
-        fakePureSetErrno(newValue);
+        cast(void)fakePureSetErrno(newValue);
     }
 }
 
@@ -1096,7 +1097,10 @@ extern (C) private @system @nogc nothrow
     ref int fakePureErrnoImpl()
     {
         import core.stdc.errno;
-        return errno();
+        version (WebAssembly)
+            return errno;
+        else
+            return errno();
     }
 }
 
@@ -1115,7 +1119,7 @@ extern(C) private @system nothrow @nogc
     pragma(mangle, "_d_delclass") void _d_delclass(Object*);
     pragma(mangle, "_d_delstruct") void _d_delstruct(void**, TypeInfo_Struct);
     pragma(mangle, "_d_delmemory") void _d_delmemory(void**);
-    pragma(mangle, "_d_delarray_t") void _d_delarray_t(void**, TypeInfo_Struct);
+    pragma(mangle, "_d_delarray_t") void _d_delarray_t(void[]*, TypeInfo_Struct);
 }
 
 /**

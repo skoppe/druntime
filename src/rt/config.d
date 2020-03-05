@@ -58,7 +58,10 @@ template rt_options()
 }
 
 import core.stdc.ctype : toupper;
-import core.stdc.stdlib : getenv;
+version (WebAssembly) {
+  // while it is possible to emulate getenv with wasi, I forgo that at this point
+} else
+    import core.stdc.stdlib : getenv;
 import core.stdc.string : strlen;
 
 extern extern(C) string[] rt_args() @nogc nothrow;
@@ -97,6 +100,7 @@ string rt_configOption(string opt, scope rt_configCallBack dg = null, bool rever
 
 string rt_cmdlineOption(string opt, scope rt_configCallBack dg) @nogc nothrow
 {
+  version (WebAssembly) {} else
     if (rt_cmdline_enabled!())
     {
         foreach (a; rt_args)
@@ -115,6 +119,9 @@ string rt_cmdlineOption(string opt, scope rt_configCallBack dg) @nogc nothrow
 
 string rt_envvarsOption(string opt, scope rt_configCallBack dg) @nogc nothrow
 {
+  version (WebAssembly) {
+    return null;
+  } else {
     if (rt_envvars_enabled!())
     {
         if (opt.length >= 32)
@@ -135,6 +142,7 @@ string rt_envvarsOption(string opt, scope rt_configCallBack dg) @nogc nothrow
         }
     }
     return null;
+  }
 }
 
 string rt_linkOption(string opt, scope rt_configCallBack dg) @nogc nothrow

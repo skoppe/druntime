@@ -66,6 +66,8 @@ else version (DragonFlyBSD)
     import _execinfo = core.sys.dragonflybsd.execinfo;
 else version (Solaris)
     import _execinfo = core.sys.solaris.execinfo;
+else version (WebAssembly)
+   enum _execinfo = false;
 
 /// Indicates the availability of backtrace functions
 enum bool hasExecinfo = is(_execinfo == module);

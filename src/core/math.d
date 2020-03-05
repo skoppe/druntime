@@ -1,4 +1,4 @@
-﻿// Written in the D programming language.
+// Written in the D programming language.
 
 /**
  * Builtin mathematical intrinsics
@@ -163,6 +163,11 @@ version (LDC)
                 }
             }
         }
+    } else version (WebAssembly) {
+      // TODO: linker doesn't like the ldexpl version, complaining about signature mismatch.
+      real ldexp(real n, int exp) @safe pure nothrow {
+        return cast(real)stdc.ldexp(cast(double)n, exp);
+      }
     }
     else // !MinGW
     {

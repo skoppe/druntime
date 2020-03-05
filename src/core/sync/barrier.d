@@ -15,6 +15,7 @@
  */
 module core.sync.barrier;
 
+version (WebAssembly) {} else:
 
 public import core.sync.exception;
 private import core.sync.condition;

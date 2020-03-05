@@ -12,6 +12,8 @@
 
 module core.simd;
 
+version (WebAssembly) {} else:
+
 pure:
 nothrow:
 @safe:

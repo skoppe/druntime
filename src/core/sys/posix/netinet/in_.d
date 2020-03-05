@@ -442,6 +442,43 @@ else version (linux)
         INADDR_NONE      = 0xFFFFFFFF
     }
 }
+else version (WebAssembly) // TODO: needs to be WASI
+{
+  static assert("No wasm in posix...");
+    private enum __SOCK_SIZE__ = 16;
+
+    struct sockaddr_in
+    {
+        sa_family_t sin_family;
+        ushort      sin_port;
+        in_addr     sin_addr;
+
+        /* Pad to size of `struct sockaddr'. */
+        ubyte[__SOCK_SIZE__ - sa_family_t.sizeof -
+              ushort.sizeof - in_addr.sizeof] __pad;
+    }
+
+    enum
+    {
+        IPPROTO_IP   = 0,
+        IPPROTO_ICMP = 1,
+        IPPROTO_IGMP = 2,
+        IPPROTO_GGP  = 3,
+        IPPROTO_TCP  = 6,
+        IPPROTO_PUP  = 12,
+        IPPROTO_UDP  = 17,
+        IPPROTO_IDP  = 22,
+	IPPROTO_RAW  = 255
+    }
+
+    enum : c_ulong
+    {
+        INADDR_ANY       = 0x00000000,
+        INADDR_BROADCAST = 0xffffffff,
+        INADDR_LOOPBACK  = 0x7f000001,
+        INADDR_NONE      = 0xFFFFFFFF
+    }
+}
 
 
 //

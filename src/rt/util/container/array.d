@@ -208,6 +208,8 @@ unittest
     assert(cnt == 0);
 }
 
+// NOTE: fails in wasm because of exceptions
+version (WebAssembly) {} else
 unittest
 {
     import core.exception;

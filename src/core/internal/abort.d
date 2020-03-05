@@ -6,6 +6,13 @@ module core.internal.abort;
  */
 void abort(scope string msg, scope string filename = __FILE__, size_t line = __LINE__) @nogc nothrow @safe
 {
+  version (WebAssembly) {
+    import core.stdc.stdio;
+    import core.sys.wasi.core;
+    (() @trusted { fprintf(stderr, "Abort: %s @ %s:%d\n", &msg[0], &filename[0], line); })();
+    proc_exit(1);
+  }
+  else {
     import core.stdc.stdlib: c_abort = abort;
     // use available OS system calls to print the message to stderr
     version (Posix)
@@ -42,4 +49,5 @@ void abort(scope string msg, scope string filename = __FILE__, size_t line = __L
     // write an appropriate message, then abort the program
     writeStr("Aborting from ", filename, "(", line.unsignedToTempString(strbuff, 10), ") ", msg);
     c_abort();
+  }
 }

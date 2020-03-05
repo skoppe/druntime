@@ -563,6 +563,11 @@ TailShared!T atomicOp(string op, T, V1)(ref shared T val, V1 mod) pure nothrow @
     if (__traits(compiles, mixin("*cast(T*)&val" ~ op ~ "mod")))
 in (atomicValueIsProperlyAligned(val))
 {
+  version (WebAssembly) {
+      T* get = cast(T*)&val;
+      // TODO: WASM atomics
+      mixin("return (*get)" ~ op ~ "mod;");
+  } else {
     version (LDC)
     {
         import ldc.intrinsics;
@@ -642,6 +647,7 @@ in (atomicValueIsProperlyAligned(val))
     {
         static assert(false, "Operation not supported.");
     }
+  }
 }
 
 
@@ -970,7 +976,8 @@ version (unittest)
         testType!(uint)();
     }
 
-    @safe pure nothrow unittest
+    // @safe pure nothrow unittest
+    unittest
     {
 
         testType!(shared int*)();
@@ -1130,6 +1137,8 @@ version (unittest)
         assert(ptr is null);
     }
 
+    // TODO: WebAssembly has no threads
+    version (WebAssembly) {} else
     unittest
     {
         import core.thread;
